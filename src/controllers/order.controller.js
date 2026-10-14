@@ -1,12 +1,10 @@
 import { AppError } from "../errors/app.error.js";
 import { BaseController } from "./base.controller.js";
+import Order from "../models/order.js";
 
 class OrderController extends BaseController {
     constructor() {
         super();
-        this.orders = [
-            {id: 1, title: 'JS', duration: 120, videoUrl: 'https://example.com/js', courseId: 1}
-        ];
 
         this.getAll = this.getAll.bind(this);
         this.getById = this.getById.bind(this);
@@ -15,82 +13,83 @@ class OrderController extends BaseController {
         this.delete = this.delete.bind(this);
     }
 
-    getAll(req, res) {
+    async getAll(req, res) {
         try {
-            const { status } = req.query;
-            const result = status ? this.orders.filter(order => order.status === status) : this.orders;
+            const { status, search } = req.query
 
-            return this.sendSuccess(res, result);
+            const filter = {}
+            if (status) filter.status = status
+            if (search) filter.item = {
+                $regex: search,
+                $options: 'i'
+            }
+
+            const orders = await Order.find(filter)
+
+            return res.status(200).json(orders)
         } catch (error) {
-            return this.handleError(res, error);
+            return this.handleError(res, error)
         }
     }
 
-    getById(req, res) {
+    async getById(req, res) {
         try {
-            const order = this.orders.find(l => l.id === Number(req.params.id));
+            const order = await Order.findById(req.params.id)
 
             if (!order) {
-                throw new AppError('order not found', 404);
+                throw new AppError('Order not found', 404)
             }
-            return this.sendSuccess(res, order);
+            return res.status(200).json(order)
         } catch (error) {
-            return this.handleError(res, error);
+            return this.handleError(res, error)
         }
     }
 
-    create(req, res) {
+    async create(req, res) {
         try {
-            const { title, duration, videoUrl, courseId } = req.body;
+            const newOrder = await Order.create(req.body)
 
-            const newOrder = {
-                id: this.orders.length ? Math.max(...this.orders.map(l => l.id)) + 1 : 1,
-                title,
-                duration,
-                videoUrl,
-                courseId
-            };
-            this.orders.push(newOrder);
-
-            return this.sendSuccess(res, newOrder, 201);
+            return res.status(201).json(newOrder)
         } catch (error) {
-            return this.handleError(res, error);
+            return this.handleError(res, error)
         }
     }
 
-    update(req, res) {
+    async update(req, res) {
         try {
-            const order = this.orders.find(l => l.id === Number(req.params.id));
+            const order = await Order.findByIdAndUpdate(
+                req.params.id,
+                req.body,
+                {
+                    returnDocument: 'after',
+                    runValidators: true
+                }
+            )
+
             if (!order) {
-                throw new AppError('order not found', 404);
+                throw new AppError('Order is not found', 404)
             }
 
-            const { id, ...fields } = req.body;
-            if (Object.keys(fields).length === 0) {
-                throw new AppError('No fields to update', 400);
-            }
-
-            Object.assign(order, fields);
-            return this.sendSuccess(res, order);
-        } catch (error) {
-            return this.handleError(res, error);
+            return res.status(200).json(order)
+        } catch (err) {
+            return this.handleError(res, err)
         }
     }
 
-    delete(req, res) {
+    async delete(req, res) {
         try {
-            const index = this.orders.findIndex(l => l.id === Number(req.params.id));
-            if (index === -1) {
-                throw new AppError('order not found', 404);
+            const order = await Order.findByIdAndDelete(req.params.id)
+
+            if (!order) {
+                throw new AppError('Order is not found', 404)
             }
 
-            const deleted = this.orders.splice(index, 1)[0];
-            return this.sendSuccess(res, {
-                message: `order ${deleted.id} has been deleted`,
-                order: deleted
-            });
-        } catch (error) {
-            return this.handleError(res, error);
+            return res.status(200).json({
+                message: `${order.item} order has been canceled`,
+                order
+            })
+        } catch (err) {
+            return this.handleError(res, err)
         }
     }
 }
